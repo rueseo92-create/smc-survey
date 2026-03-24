@@ -2,7 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
-const { saveResponse, getAllResponses, getResponse, getStats } = require('./db');
+const { saveResponse, getAllResponses, getResponse, getStats, saveDraft, loadDraft, deleteDraft } = require('./db');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -18,16 +18,51 @@ app.use(express.static(path.join(__dirname, 'public')));
 // Submit response
 app.post('/api/responses', async (req, res) => {
   try {
-    const { name, position, experience, ratings, comments, moduleComments, overall } = req.body;
+    const { name, position, experience, ratings, comments, moduleComments, overall, resumeCode } = req.body;
     if (!name || !name.trim()) {
       return res.status(400).json({ error: '성명을 입력해주세요.' });
     }
     const id = await saveResponse({ name, position, experience, ratings, comments, moduleComments, overall });
+    if (resumeCode) {
+      await deleteDraft(resumeCode).catch(err => console.error('Draft cleanup error:', err));
+    }
     console.log(`[${new Date().toISOString()}] New response: ${id} by ${name}`);
     res.json({ success: true, id });
   } catch (err) {
     console.error('Save error:', err);
     res.status(500).json({ error: '저장 중 오류가 발생했습니다.' });
+  }
+});
+
+// ===== DRAFT API =====
+
+app.post('/api/drafts', async (req, res) => {
+  try {
+    const code = await saveDraft(req.body);
+    res.json({ success: true, code });
+  } catch (err) {
+    console.error('Draft save error:', err);
+    res.status(500).json({ error: '임시저장 중 오류가 발생했습니다.' });
+  }
+});
+
+app.get('/api/drafts/:code', async (req, res) => {
+  try {
+    const draft = await loadDraft(req.params.code);
+    if (!draft) return res.status(404).json({ error: '해당 코드의 임시저장 데이터를 찾을 수 없습니다.' });
+    res.json(draft);
+  } catch (err) {
+    console.error('Draft load error:', err);
+    res.status(500).json({ error: '불러오기 중 오류가 발생했습니다.' });
+  }
+});
+
+app.delete('/api/drafts/:code', async (req, res) => {
+  try {
+    await deleteDraft(req.params.code);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: '삭제 중 오류가 발생했습니다.' });
   }
 });
 

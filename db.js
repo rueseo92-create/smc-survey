@@ -100,4 +100,75 @@ async function getStats() {
   };
 }
 
-module.exports = { saveResponse, getAllResponses, getResponse, getStats };
+// ===== DRAFT (중간저장) =====
+
+function generateResumeCode() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let code = '';
+  for (let i = 0; i < 6; i++) code += chars.charAt(Math.floor(Math.random() * chars.length));
+  return code;
+}
+
+async function saveDraft(data) {
+  let code = data.resumeCode;
+  if (!code) {
+    for (let attempt = 0; attempt < 5; attempt++) {
+      code = generateResumeCode();
+      const { data: existing } = await supabase
+        .from('survey_drafts').select('resume_code').eq('resume_code', code).single();
+      if (!existing) break;
+      if (attempt === 4) throw new Error('코드 생성 실패');
+    }
+  }
+
+  const row = {
+    resume_code: code,
+    step: data.step || 0,
+    name: data.name || '',
+    position: data.position || '',
+    experience: data.experience || '',
+    ratings: data.ratings || {},
+    comments: data.comments || {},
+    module_comments: data.moduleComments || {},
+    overall: data.overall || {},
+    disagree_types: data.disagreeTypes || {},
+    updated_at: new Date().toISOString()
+  };
+
+  const { error } = await supabase
+    .from('survey_drafts')
+    .upsert(row, { onConflict: 'resume_code' });
+
+  if (error) throw new Error('임시저장 실패: ' + error.message);
+  console.log(`[DB] Draft saved: ${code}`);
+  return code;
+}
+
+async function loadDraft(code) {
+  const { data, error } = await supabase
+    .from('survey_drafts')
+    .select('*')
+    .eq('resume_code', code.toUpperCase().trim())
+    .single();
+
+  if (error || !data) return null;
+
+  return {
+    resumeCode: data.resume_code,
+    step: data.step,
+    name: data.name || '',
+    position: data.position || '',
+    experience: data.experience || '',
+    ratings: data.ratings || {},
+    comments: data.comments || {},
+    moduleComments: data.module_comments || {},
+    overall: data.overall || {},
+    disagreeTypes: data.disagree_types || {}
+  };
+}
+
+async function deleteDraft(code) {
+  await supabase.from('survey_drafts').delete().eq('resume_code', code);
+}
+
+module.exports = { saveResponse, getAllResponses, getResponse, getStats, saveDraft, loadDraft, deleteDraft };

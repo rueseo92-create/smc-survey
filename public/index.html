@@ -121,6 +121,35 @@ body{font-family:'Pretendard',-apple-system,sans-serif;background:var(--bg);colo
 .stats-badge.green{background:var(--green-bg);color:var(--green);}
 .stats-badge.gray{background:#F3F4F6;color:var(--text3);}
 
+/* Resume section */
+.resume-section{margin-top:20px;padding-top:20px;border-top:1px solid var(--border);width:100%;}
+.resume-row{display:flex;gap:8px;margin-top:8px;}
+.resume-input{flex:1;padding:11px 14px;border:1px solid var(--border);border-radius:8px;font-size:16px;
+  font-family:'Pretendard',monospace;text-align:center;letter-spacing:4px;text-transform:uppercase;}
+.resume-input:focus{outline:none;border-color:var(--blue);}
+.resume-input::placeholder{letter-spacing:normal;font-size:13px;}
+.btn-resume{padding:11px 20px;border:none;border-radius:8px;background:var(--green);color:#FFF;
+  font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;}
+.btn-resume:disabled{opacity:.5;cursor:default;}
+
+/* Draft modal */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;
+  justify-content:center;z-index:300;animation:fadeIn .2s ease;}
+.modal-card{background:var(--surface);border-radius:16px;padding:32px 28px;max-width:380px;width:90%;
+  text-align:center;box-shadow:0 12px 40px rgba(0,0,0,.15);}
+.modal-code{font-size:36px;font-weight:800;letter-spacing:8px;color:var(--blue);margin:16px 0;
+  font-family:'Pretendard',monospace;user-select:all;}
+.modal-hint{font-size:13px;color:var(--text2);margin-bottom:20px;line-height:1.6;}
+.btn-copy{padding:10px 24px;border:1.5px solid var(--blue);border-radius:8px;background:var(--blue-bg);
+  color:var(--blue);font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;margin-right:8px;}
+.btn-close-modal{padding:10px 24px;border:1px solid var(--border);border-radius:8px;background:var(--surface);
+  color:var(--text2);font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;}
+@keyframes fadeIn{from{opacity:0;}to{opacity:1;}}
+.btn-draft{background:transparent;color:var(--green);border:1.5px solid var(--green);font-size:13px;padding:10px 14px;}
+.btn-draft:hover{background:var(--green-bg);}
+.nav-row .btn-draft{flex:0 0 auto;width:auto;}
+.resume-error{color:var(--red);font-size:12px;margin-top:6px;display:none;}
+
 /* Mobile */
 @media(max-width:480px){
   .container{padding:16px 12px 100px;}
@@ -178,7 +207,8 @@ let state = {
   step: 0, // 0=info, 1-23=modules, 24=overall
   name: '', position: '', experience: '',
   ratings: {}, comments: {}, moduleComments: {}, overall: {},
-  disagreeTypes: {} // track modify vs delete per item
+  disagreeTypes: {},
+  resumeCode: null
 };
 
 const totalSteps = MODULES.length + 2; // info + 23 modules + overall
@@ -196,6 +226,36 @@ async function saveToStorage(resp) {
   }
   const data = await res.json();
   return data.id;
+}
+
+async function saveDraftToServer() {
+  flushTextareas();
+  if (state.step === 0) {
+    state.name = document.getElementById('fname')?.value || state.name;
+    state.position = document.getElementById('fpos')?.value || state.position;
+    state.experience = document.getElementById('fexp')?.value || state.experience;
+  }
+  const res = await fetch('/api/drafts', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      resumeCode: state.resumeCode, step: state.step,
+      name: state.name, position: state.position, experience: state.experience,
+      ratings: state.ratings, comments: state.comments,
+      moduleComments: state.moduleComments, overall: state.overall,
+      disagreeTypes: state.disagreeTypes
+    })
+  });
+  if (!res.ok) throw new Error('임시저장 실패');
+  const data = await res.json();
+  state.resumeCode = data.code;
+  return data.code;
+}
+
+async function loadDraftFromServer(code) {
+  const res = await fetch('/api/drafts/' + encodeURIComponent(code.trim().toUpperCase()));
+  if (!res.ok) { if (res.status === 404) throw new Error('NOT_FOUND'); throw new Error('서버 오류'); }
+  return await res.json();
 }
 
 // ===== RENDER =====
@@ -221,8 +281,18 @@ function renderLanding(el) {
         <h2>퇴원교육 모듈 콘텐츠 적절성 평가</h2>
         <p>${MODULES.length}개 모듈 · ${total}개 문항 · 동의/비동의 평가<br>소아응급의학 전문가 대상 설문</p>
         <button class="btn btn-primary" onclick="goTo('info',0)">설문 시작하기</button>
+        <div class="resume-section">
+          <div style="font-size:13px;font-weight:600;color:var(--text2);">저장한 설문 이어하기</div>
+          <div class="resume-row">
+            <input class="resume-input" id="resumeCodeInput" maxlength="6" placeholder="코드 입력"
+              oninput="this.value=this.value.toUpperCase().replace(/[^A-Z0-9]/g,'')"
+              onkeydown="if(event.key==='Enter')resumeDraft()">
+            <button class="btn-resume" id="resumeBtn" onclick="resumeDraft()">이어하기</button>
+          </div>
+          <div class="resume-error" id="resumeError"></div>
+        </div>
       </div>
-      <p style="margin-top:16px;font-size:11px;color:var(--text3)">(주)하해호 · v7.1 · 2026</p>
+      <p style="margin-top:16px;font-size:11px;color:var(--text3)">(주)하해호 · v8.0 · 2026</p>
     </div>`;
 }
 
@@ -241,6 +311,7 @@ function renderInfo(el) {
         </div>
       </div>
       <div class="nav-row">
+        <button class="btn btn-draft" onclick="if(saveInfo())saveDraft()">💾 중간저장</button>
         <button class="btn btn-primary" onclick="saveInfo();next()">설문 시작 →</button>
       </div>
     </div>`;
@@ -310,6 +381,7 @@ function renderModule(el, idx) {
       </div>
       <div class="nav-row">
         <button class="btn btn-secondary" onclick="prev()">← 이전</button>
+        <button class="btn btn-draft" onclick="saveDraft()">💾 중간저장</button>
         <button class="btn btn-primary" onclick="next()">다음 →</button>
       </div>
     </div>`;
@@ -333,6 +405,7 @@ function renderOverall(el) {
       <div class="card">${qs}</div>
       <div class="nav-row">
         <button class="btn btn-secondary" onclick="prev()">← 이전</button>
+        <button class="btn btn-draft" onclick="saveDraft()">💾 중간저장</button>
         <button class="btn btn-primary" id="submitBtn" onclick="submit()">설문 제출 ✓</button>
       </div>
     </div>`;
@@ -471,15 +544,97 @@ async function submit() {
     await saveToStorage({
       name: state.name, position: state.position, experience: state.experience,
       ratings: state.ratings, comments: state.comments,
-      moduleComments: state.moduleComments, overall: state.overall
+      moduleComments: state.moduleComments, overall: state.overall,
+      resumeCode: state.resumeCode
     });
     state.page = 'done';
+    state.resumeCode = null;
     shouldScroll = true;
     render();
   } catch(e) {
     showToast('저장 중 오류가 발생했습니다. 다시 시도해주세요.');
     if (btn) { btn.disabled = false; btn.textContent = '설문 제출 ✓'; }
   }
+}
+
+// ===== DRAFT =====
+async function saveDraft() {
+  try {
+    const code = await saveDraftToServer();
+    showDraftModal(code);
+  } catch(e) {
+    showToast('임시저장 중 오류가 발생했습니다.');
+  }
+}
+
+async function resumeDraft() {
+  const input = document.getElementById('resumeCodeInput');
+  const btn = document.getElementById('resumeBtn');
+  const errEl = document.getElementById('resumeError');
+  const code = (input?.value || '').trim().toUpperCase();
+  if (code.length !== 6) {
+    errEl.textContent = '6자리 코드를 입력해주세요.';
+    errEl.style.display = 'block';
+    return;
+  }
+  btn.disabled = true; btn.textContent = '불러오는 중...';
+  errEl.style.display = 'none';
+  try {
+    const d = await loadDraftFromServer(code);
+    state.resumeCode = d.resumeCode;
+    state.step = d.step;
+    state.name = d.name;
+    state.position = d.position;
+    state.experience = d.experience;
+    state.ratings = d.ratings;
+    state.comments = d.comments;
+    state.moduleComments = d.moduleComments;
+    state.overall = d.overall;
+    state.disagreeTypes = d.disagreeTypes;
+    state.page = 'survey';
+    shouldScroll = true;
+    showToast('임시저장된 설문을 불러왔습니다.');
+    render();
+  } catch(e) {
+    errEl.textContent = e.message === 'NOT_FOUND' ? '해당 코드의 저장 데이터가 없습니다.' : '불러오기 중 오류가 발생했습니다.';
+    errEl.style.display = 'block';
+    btn.disabled = false; btn.textContent = '이어하기';
+  }
+}
+
+function showDraftModal(code) {
+  const old = document.getElementById('draftModal');
+  if (old) old.remove();
+  const div = document.createElement('div');
+  div.id = 'draftModal';
+  div.className = 'modal-overlay';
+  div.onclick = function(e) { if (e.target === div) div.remove(); };
+  div.innerHTML = `
+    <div class="modal-card">
+      <div style="font-size:40px;margin-bottom:8px;">💾</div>
+      <div style="font-size:18px;font-weight:800;margin-bottom:4px;">임시저장 완료</div>
+      <div class="modal-hint">아래 코드를 메모해두세요.<br>나중에 이 코드로 이어서 작성할 수 있습니다.</div>
+      <div class="modal-code">${code}</div>
+      <div style="margin-top:20px;">
+        <button class="btn-copy" onclick="copyCode('${code}')">📋 코드 복사</button>
+        <button class="btn-close-modal" onclick="document.getElementById('draftModal').remove()">닫기</button>
+      </div>
+    </div>`;
+  document.body.appendChild(div);
+}
+
+function copyCode(code) {
+  navigator.clipboard.writeText(code).then(() => {
+    showToast('코드가 복사되었습니다: ' + code);
+  }).catch(() => {
+    const ta = document.createElement('textarea');
+    ta.value = code;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    showToast('코드가 복사되었습니다: ' + code);
+  });
 }
 
 // ===== INIT =====

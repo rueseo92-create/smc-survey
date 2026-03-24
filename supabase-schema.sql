@@ -30,3 +30,35 @@ CREATE POLICY "Anyone can read responses"
 
 -- 인덱스: 최신순 조회 최적화
 CREATE INDEX IF NOT EXISTS idx_responses_created_at ON survey_responses(created_at DESC);
+
+-- ===== 중간저장 (Drafts) 테이블 =====
+CREATE TABLE IF NOT EXISTS survey_drafts (
+  resume_code TEXT PRIMARY KEY,
+  step INTEGER NOT NULL DEFAULT 0,
+  name TEXT DEFAULT '',
+  position TEXT DEFAULT '',
+  experience TEXT DEFAULT '',
+  ratings JSONB DEFAULT '{}',
+  comments JSONB DEFAULT '{}',
+  module_comments JSONB DEFAULT '{}',
+  overall JSONB DEFAULT '{}',
+  disagree_types JSONB DEFAULT '{}',
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE survey_drafts ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Anyone can insert drafts"
+  ON survey_drafts FOR INSERT TO anon WITH CHECK (true);
+
+CREATE POLICY "Anyone can read drafts"
+  ON survey_drafts FOR SELECT TO anon USING (true);
+
+CREATE POLICY "Anyone can update drafts"
+  ON survey_drafts FOR UPDATE TO anon USING (true) WITH CHECK (true);
+
+CREATE POLICY "Anyone can delete drafts"
+  ON survey_drafts FOR DELETE TO anon USING (true);
+
+CREATE INDEX IF NOT EXISTS idx_drafts_updated_at ON survey_drafts(updated_at DESC);
