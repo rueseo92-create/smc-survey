@@ -121,6 +121,11 @@ body{font-family:'Pretendard',-apple-system,sans-serif;background:var(--bg);colo
 .stats-badge.green{background:var(--green-bg);color:var(--green);}
 .stats-badge.gray{background:#F3F4F6;color:var(--text3);}
 
+/* Agree All button */
+.btn-agree-all{padding:7px 16px;border:1.5px solid var(--green);background:var(--green-bg);color:var(--green);border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .15s;}
+.btn-agree-all:hover{background:var(--green);color:#FFF;}
+.btn-agree-all:active{transform:scale(.97);}
+
 /* Resume section */
 .resume-section{margin-top:20px;padding-top:20px;border-top:1px solid var(--border);width:100%;}
 .resume-row{display:flex;gap:8px;margin-top:8px;}
@@ -370,9 +375,11 @@ function renderModule(el, idx) {
       <div class="card" style="padding:14px 16px;margin-bottom:10px;">
         <span class="badge-cc">🏥 ${esc(mod.cc)}</span>
         <span class="badge-ev">📚 ${esc(mod.ev)}</span>
-        <div style="margin-top:8px;">
+        <div style="margin-top:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
           <span class="stats-badge ${answered===total?'green':'gray'}">${answered === total ? '✓ 전체 응답 완료' : answered + ' / ' + total + ' 응답'}</span>
+          <button class="btn-agree-all" onclick="agreeAll('${mod.id}',${total})">✓ 전체 동의</button>
         </div>
+        <div style="margin-top:6px;font-size:11px;color:var(--text3);line-height:1.5;">문항을 읽고 비동의할 항목만 개별 변경해주세요</div>
       </div>
       ${itemsHtml}
       <div class="card module-comment" style="margin-top:12px;">
@@ -555,6 +562,17 @@ async function submit() {
     showToast('저장 중 오류가 발생했습니다. 다시 시도해주세요.');
     if (btn) { btn.disabled = false; btn.textContent = '설문 제출 ✓'; }
   }
+}
+
+// ===== AGREE ALL =====
+function agreeAll(mid, count) {
+  if (!state.ratings[mid]) state.ratings[mid] = {};
+  for (let i = 0; i < count; i++) {
+    state.ratings[mid][i] = 1; // 1 = 동의
+  }
+  shouldScroll = false;
+  render();
+  showToast('전체 동의 처리되었습니다. 비동의 항목만 개별 변경해주세요.');
 }
 
 // ===== DRAFT =====
