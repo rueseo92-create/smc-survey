@@ -145,9 +145,13 @@ function getModuleIds() {
   return ['A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W'];
 }
 
-// Start
-app.listen(PORT, () => {
-  console.log(`
+// Vercel: export app for serverless
+module.exports = app;
+
+// Local dev: listen on port
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`
   ╔══════════════════════════════════════════╗
   ║  SMC 소아응급 퇴원교육 설문 시스템       ║
   ║  ────────────────────────────────────   ║
@@ -156,5 +160,6 @@ app.listen(PORT, () => {
   ║  관리자 비번:  ${ADMIN_PASSWORD}                      ║
   ║  DB: Supabase PostgreSQL (Cloud)        ║
   ╚══════════════════════════════════════════╝
-  `);
-});
+    `);
+  });
+}
