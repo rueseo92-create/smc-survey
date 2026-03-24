@@ -1,0 +1,19 @@
+{
+  "name": "smc-survey",
+  "version": "8.0.0",
+  "description": "SMC 소아응급실 퇴원교육 전문가 설문 시스템",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.100.0",
+    "cors": "^2.8.5",
+    "dotenv": "^17.3.1",
+    "express": "^4.18.2"
+  }
+}

@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SMC 설문 관리자</title>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/pretendard/1.3.9/static/pretendard.min.css" rel="stylesheet">
+<style>
+:root{--bg:#F0F2F5;--surface:#FFF;--border:#E5E7EB;--text:#1A1D23;--text2:#6B7280;--text3:#9CA3AF;--blue:#2563EB;--green:#059669;--red:#DC2626;--orange:#D97706;--radius:12px;}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:'Pretendard',-apple-system,sans-serif;background:var(--bg);color:var(--text);line-height:1.5;}
+.container{max-width:960px;margin:0 auto;padding:24px 16px;}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:24px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,.04);}
+
+/* Login */
+.login-wrap{display:flex;align-items:center;justify-content:center;min-height:100vh;padding:24px;}
+.login-card{max-width:400px;width:100%;text-align:center;}
+.login-card input{width:100%;padding:12px;border:1px solid var(--border);border-radius:8px;font-size:14px;font-family:inherit;text-align:center;margin-bottom:8px;}
+.login-card input.error{border-color:var(--red);}
+
+.btn{padding:12px 20px;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .2s;}
+.btn-primary{background:var(--blue);color:#FFF;width:100%;}
+.btn-dark{background:#1F2937;color:#FFF;width:100%;}
+.btn-green{background:var(--green);color:#FFF;}
+.btn-blue{background:var(--blue);color:#FFF;}
+.btn-gray{background:var(--text2);color:#FFF;}
+.btn-sm{padding:8px 16px;font-size:12px;}
+.btn-back{background:none;border:none;color:var(--text3);font-size:13px;cursor:pointer;margin-top:12px;}
+
+/* Header */
+.header{display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;flex-wrap:wrap;gap:12px;}
+.header h1{font-size:20px;font-weight:800;}
+.header-actions{display:flex;gap:8px;flex-wrap:wrap;}
+
+/* Stats */
+.stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:20px;}
+.stat{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px;}
+.stat-val{font-size:32px;font-weight:800;}
+.stat-label{font-size:11px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-top:2px;}
+
+/* Table */
+table{width:100%;border-collapse:collapse;font-size:13px;}
+thead th{text-align:left;padding:10px 12px;font-weight:700;color:var(--text2);border-bottom:2px solid var(--border);}
+tbody tr{border-bottom:1px solid #F3F4F6;cursor:pointer;transition:background .15s;}
+tbody tr:hover{background:#F8F9FB;}
+tbody td{padding:10px 12px;}
+
+/* Detail */
+.detail{margin-top:12px;}
+.mod-block{margin-bottom:12px;padding:10px;background:#F9FAFB;border-radius:8px;}
+.mod-block-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;}
+.mod-block-name{font-size:13px;font-weight:700;}
+.mod-block-rate{font-size:12px;font-weight:700;}
+.item-chips{display:flex;flex-wrap:wrap;gap:3px;}
+.chip{font-size:10px;padding:2px 5px;border-radius:4px;font-weight:600;}
+.chip-agree{background:#DCFCE7;color:#16A34A;}
+.chip-disagree{background:#FEE2E2;color:#DC2626;}
+.disagree-comment{font-size:11px;color:var(--red);margin-top:3px;padding-left:4px;}
+.module-comment{font-size:11px;color:var(--text2);margin-top:4px;font-style:italic;}
+
+.error-msg{font-size:12px;color:var(--red);margin-bottom:8px;}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+const MODULES = ['A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W'];
+const MOD_NAMES = {A:'공통',B:'발열',C:'심혈관',D:'호흡기',E:'객혈/혈담',F:'신경학적',G:'GI출혈',H:'구토/오심',I:'복통/소화기',J:'상기도/인후',K:'출혈',L:'외상/화상',M:'이물',N:'통증관리',O:'혈당이상',P:'혈압이상',Q:'비뇨기',R:'정신건강',S:'피부/알레르기',T:'발작',U:'두통',V:'기타/장치',W:'사후피임약'};
+
+let authed = false;
+let responses = [];
+let selected = null;
+let loading = false;
+
+function render() {
+  const app = document.getElementById('app');
+  if (!authed) { renderLogin(app); return; }
+  renderDashboard(app);
+}
+
+function renderLogin(el) {
+  el.innerHTML = `
+    <div class="login-wrap">
+      <div class="card login-card">
+        <div style="font-size:40px;margin-bottom:12px;">🔐</div>
+        <h2 style="font-size:18px;font-weight:800;margin-bottom:20px;">관리자 로그인</h2>
+        <input type="password" id="pw" placeholder="비밀번호 입력" onkeydown="if(event.key==='Enter')doLogin()">
+        <div class="error-msg" id="loginErr" style="display:none;"></div>
+        <button class="btn btn-dark" onclick="doLogin()">로그인</button>
+        <button class="btn-back" onclick="location.href='/'">← 설문 페이지로</button>
+      </div>
+    </div>`;
+}
+
+async function doLogin() {
+  const pw = document.getElementById('pw').value;
+  const res = await fetch('/api/admin/login', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({password:pw})
+  });
+  if (res.ok) { authed = true; await loadData(); render(); }
+  else {
+    document.getElementById('pw').classList.add('error');
+    const err = document.getElementById('loginErr');
+    err.textContent = '비밀번호가 올바르지 않습니다.';
+    err.style.display = 'block';
+  }
+}
+
+async function loadData() {
+  loading = true;
+  try {
+    const res = await fetch('/api/responses');
+    responses = await res.json();
+  } catch(e) { responses = []; }
+  loading = false;
+}
+
+function renderDashboard(el) {
+  if (loading) { el.innerHTML = '<div style="text-align:center;padding:100px;color:var(--text2);">불러오는 중...</div>'; return; }
+
+  // Calc stats
+  let totalAgree = 0, totalVotes = 0;
+  responses.forEach(r => {
+    Object.values(r.ratings || {}).forEach(m => {
+      Object.values(m).forEach(v => { totalVotes++; if (v === 1) totalAgree++; });
+    });
+  });
+  const agreeRate = totalVotes > 0 ? Math.round(totalAgree / totalVotes * 100) : 0;
+  const latest = responses.length > 0 ? new Date(responses[0].timestamp).toLocaleDateString('ko') : '-';
+
+  let tableRows = '';
+  responses.forEach((r, i) => {
+    tableRows += `
+      <tr onclick="toggleDetail(${i})" style="background:${selected===i?'#EFF6FF':'transparent'}">
+        <td style="font-weight:600;">${esc(r.name||'(미입력)')}</td>
+        <td>${esc(r.position||'-')}</td>
+        <td>${esc(r.experience||'-')}</td>
+        <td style="font-size:12px;color:var(--text2);">${r.timestamp?new Date(r.timestamp).toLocaleString('ko'):'-'}</td>
+        <td style="font-size:12px;color:var(--blue);font-weight:600;">${selected===i?'접기 ▲':'상세 ▼'}</td>
+      </tr>`;
+  });
+
+  let detailHtml = '';
+  if (selected !== null && responses[selected]) {
+    const r = responses[selected];
+    detailHtml = `<div class="detail card"><h3 style="font-size:14px;font-weight:700;margin-bottom:12px;">📋 ${esc(r.name)} 님의 상세 응답</h3>`;
+    MODULES.forEach(mid => {
+      const modR = r.ratings?.[mid];
+      if (!modR || Object.keys(modR).length === 0) return;
+      const agCnt = Object.values(modR).filter(v=>v===1).length;
+      const disCnt = Object.values(modR).filter(v=>v===2).length;
+      const tot = agCnt + disCnt;
+      const rate = tot > 0 ? Math.round(agCnt/tot*100) : 0;
+      
+      let chips = '';
+      Object.entries(modR).forEach(([i,v]) => {
+        const c = r.comments?.[mid]?.[i];
+        chips += `<span class="chip ${v===1?'chip-agree':'chip-disagree'}" title="${esc(c||'')}">${Number(i)+1}:${v===1?'✓':'✗'}${c?' 💬':''}</span>`;
+      });
+
+      let disComments = '';
+      Object.entries(modR).forEach(([i,v]) => {
+        const c = r.comments?.[mid]?.[i];
+        if (v === 2 && c) disComments += `<div class="disagree-comment">#${Number(i)+1} ${esc(c)}</div>`;
+      });
+
+      const mc = r.moduleComments?.[mid];
+      detailHtml += `
+        <div class="mod-block">
+          <div class="mod-block-header">
+            <span class="mod-block-name">Module ${mid} — ${MOD_NAMES[mid]||mid}</span>
+            <span class="mod-block-rate" style="color:${rate>=80?'var(--green)':rate>=50?'var(--orange)':'var(--red)'}">동의 ${rate}% (${agCnt}/${tot})</span>
+          </div>
+          <div class="item-chips">${chips}</div>
+          ${disComments}
+          ${mc?'<div class="module-comment">💬 '+esc(mc)+'</div>':''}
+        </div>`;
+    });
+    detailHtml += '</div>';
+  }
+
+  el.innerHTML = `
+    <div class="container">
+      <div class="header">
+        <div>
+          <h1>📊 관리자 대시보드</h1>
+          <p style="font-size:13px;color:var(--text2);">총 ${responses.length}건의 응답</p>
+        </div>
+        <div class="header-actions">
+          <a href="/api/responses/export/csv" class="btn btn-green btn-sm">📥 CSV</a>
+          <a href="/api/responses/export/json" class="btn btn-blue btn-sm">📥 JSON</a>
+          <button class="btn btn-gray btn-sm" onclick="authed=false;render()">로그아웃</button>
+        </div>
+      </div>
+
+      <div class="stats-grid">
+        <div class="stat"><div class="stat-val" style="color:var(--blue);">${responses.length}</div><div class="stat-label">총 응답 수</div></div>
+        <div class="stat"><div class="stat-val" style="color:var(--green);">${agreeRate}%</div><div class="stat-label">평균 동의율</div></div>
+        <div class="stat"><div class="stat-val" style="color:var(--orange);font-size:20px;">${latest}</div><div class="stat-label">최근 응답</div></div>
+      </div>
+
+      ${responses.length === 0 ? `
+        <div class="card" style="text-align:center;padding:48px;">
+          <div style="font-size:48px;margin-bottom:12px;">📭</div>
+          <p style="color:var(--text3);">아직 제출된 응답이 없습니다.</p>
+        </div>
+      ` : `
+        <div class="card">
+          <h3 style="font-size:14px;font-weight:700;margin-bottom:12px;">응답 목록</h3>
+          <div style="overflow-x:auto;">
+            <table>
+              <thead><tr><th>응답자</th><th>직책</th><th>경력</th><th>제출일시</th><th></th></tr></thead>
+              <tbody>${tableRows}</tbody>
+            </table>
+          </div>
+        </div>
+        ${detailHtml}
+      `}
+    </div>`;
+}
+
+function toggleDetail(i) { selected = selected === i ? null : i; render(); }
+function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+render();
+</script>
+</body>
+</html>
