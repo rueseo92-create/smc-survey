@@ -282,9 +282,9 @@ function renderModule(el, idx) {
                   <button class="disagree-tab delete ${dType==='delete'?'active':''}" onclick="setDType('${mod.id}',${i},'delete')">🗑️ 삭제</button>
                 </div>
                 ${dType==='modify' ? `
-                  <textarea class="disagree-textarea" placeholder="어떻게 수정하면 좋을지 의견을 작성해주세요..." onchange="setComment('${mod.id}',${i},this.value)">${esc(comment.startsWith('[삭제]')?'':comment)}</textarea>
+                  <textarea class="disagree-textarea" data-mid="${mod.id}" data-idx="${i}" data-type="comment" placeholder="어떻게 수정하면 좋을지 의견을 작성해주세요..." oninput="setComment('${mod.id}',${i},this.value)">${esc(comment.startsWith('[삭제]')?'':comment)}</textarea>
                 ` : `
-                  <textarea class="disagree-textarea" placeholder="(선택) 삭제 사유를 입력해주세요..." onchange="setComment('${mod.id}',${i},'[삭제] '+this.value)">${esc(comment.startsWith('[삭제]')?comment.slice(5).trim():comment)}</textarea>
+                  <textarea class="disagree-textarea" data-mid="${mod.id}" data-idx="${i}" data-type="comment" placeholder="(선택) 삭제 사유를 입력해주세요..." oninput="setComment('${mod.id}',${i},'[삭제] '+this.value)">${esc(comment.startsWith('[삭제]')?comment.slice(5).trim():comment)}</textarea>
                 `}
               </div>
             ` : ''}
@@ -306,15 +306,15 @@ function renderModule(el, idx) {
       ${itemsHtml}
       <div class="card module-comment" style="margin-top:12px;">
         <label style="font-size:13px;font-weight:700;display:block;margin-bottom:8px;">💬 Module ${mod.id} 전체 의견</label>
-        <textarea placeholder="이 모듈에 대한 추가/삭제/수정 제안..." onchange="state.moduleComments['${mod.id}']=this.value">${esc(state.moduleComments[mod.id]||'')}</textarea>
+        <textarea data-mid="${mod.id}" data-type="module" placeholder="이 모듈에 대한 추가/삭제/수정 제안..." oninput="state.moduleComments['${mod.id}']=this.value">${esc(state.moduleComments[mod.id]||'')}</textarea>
       </div>
       <div class="nav-row">
         <button class="btn btn-secondary" onclick="prev()">← 이전</button>
         <button class="btn btn-primary" onclick="next()">다음 →</button>
       </div>
     </div>`;
-  
-  window.scrollTo({top:0, behavior:'smooth'});
+
+  if (shouldScroll) { window.scrollTo({top:0, behavior:'smooth'}); shouldScroll = false; }
 }
 
 function renderOverall(el) {
@@ -323,7 +323,7 @@ function renderOverall(el) {
     qs += `
       <div class="overall-q">
         <label>${i+1}. ${esc(q)}</label>
-        <textarea placeholder="의견을 자유롭게 작성해주세요..." onchange="state.overall[${i}]=this.value">${esc(state.overall[i]||'')}</textarea>
+        <textarea data-overall="${i}" placeholder="의견을 자유롭게 작성해주세요..." oninput="state.overall[${i}]=this.value">${esc(state.overall[i]||'')}</textarea>
       </div>`;
   });
 
@@ -336,7 +336,7 @@ function renderOverall(el) {
         <button class="btn btn-primary" id="submitBtn" onclick="submit()">설문 제출 ✓</button>
       </div>
     </div>`;
-  window.scrollTo({top:0, behavior:'smooth'});
+  if (shouldScroll) { window.scrollTo({top:0, behavior:'smooth'}); shouldScroll = false; }
 }
 
 function renderDone(el) {
@@ -375,9 +375,12 @@ function showToast(msg) {
 }
 
 // ===== ACTIONS =====
+let shouldScroll = false; // 페이지 전환 시에만 스크롤
+
 function goTo(page, step) {
   state.page = page === 'landing' ? 'landing' : (page === 'done' ? 'done' : 'survey');
   state.step = step;
+  shouldScroll = true;
   render();
 }
 
@@ -389,36 +392,58 @@ function saveInfo() {
   return true;
 }
 
+// 렌더링 전 열려있는 textarea 값을 state에 저장
+function flushTextareas() {
+  document.querySelectorAll('textarea[data-mid]').forEach(ta => {
+    const mid = ta.dataset.mid;
+    const idx = parseInt(ta.dataset.idx);
+    const type = ta.dataset.type;
+    if (type === 'comment') {
+      if (!state.comments[mid]) state.comments[mid] = {};
+      state.comments[mid][idx] = ta.value;
+    } else if (type === 'module') {
+      state.moduleComments[mid] = ta.value;
+    }
+  });
+  document.querySelectorAll('textarea[data-overall]').forEach(ta => {
+    state.overall[parseInt(ta.dataset.overall)] = ta.value;
+  });
+}
+
 function next() {
+  flushTextareas();
   if (state.step === 0 && !saveInfo()) return;
   if (state.step < MODULES.length + 1) {
     state.step++;
     state.page = 'survey';
   }
+  shouldScroll = true;
   render();
 }
 
 function prev() {
+  flushTextareas();
   if (state.step > 0) { state.step--; state.page = 'survey'; }
   else { state.page = 'landing'; }
+  shouldScroll = true;
   render();
 }
 
 function rate(mid, idx, val) {
+  flushTextareas();
   if (!state.ratings[mid]) state.ratings[mid] = {};
   state.ratings[mid][idx] = val;
   if (val === 1) {
-    // Clear comment on agree
     if (state.comments[mid]) state.comments[mid][idx] = '';
   }
   if (val === 2) {
-    // Default disagree type
     if (!state.disagreeTypes[mid + '-' + idx]) state.disagreeTypes[mid + '-' + idx] = 'modify';
   }
   render();
 }
 
 function setDType(mid, idx, type) {
+  flushTextareas();
   state.disagreeTypes[mid + '-' + idx] = type;
   if (type === 'delete') {
     if (!state.comments[mid]) state.comments[mid] = {};
@@ -439,6 +464,7 @@ function setComment(mid, idx, val) {
 }
 
 async function submit() {
+  flushTextareas();
   const btn = document.getElementById('submitBtn');
   if (btn) { btn.disabled = true; btn.textContent = '저장 중...'; }
   try {
@@ -448,6 +474,7 @@ async function submit() {
       moduleComments: state.moduleComments, overall: state.overall
     });
     state.page = 'done';
+    shouldScroll = true;
     render();
   } catch(e) {
     showToast('저장 중 오류가 발생했습니다. 다시 시도해주세요.');
