@@ -68,9 +68,16 @@ const MODULES = ['A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P'
 const MOD_NAMES = {A:'공통',B:'발열',C:'심혈관',D:'호흡기',E:'객혈/혈담',F:'신경학적',G:'GI출혈',H:'구토/오심',I:'복통/소화기',J:'상기도/인후',K:'출혈',L:'외상/화상',M:'이물',N:'통증관리',O:'혈당이상',P:'혈압이상',Q:'비뇨기',R:'정신건강',S:'피부/알레르기',T:'발작',U:'두통',V:'기타/장치',W:'사후피임약'};
 
 let authed = false;
+let adminToken = sessionStorage.getItem('adminToken') || null;
 let responses = [];
 let selected = null;
 let loading = false;
+
+if (adminToken) { authed = true; loadData().then(render); }
+
+function authHeaders() {
+  return { 'Authorization': 'Bearer ' + adminToken, 'Content-Type': 'application/json' };
+}
 
 function render() {
   const app = document.getElementById('app');
@@ -98,8 +105,14 @@ async function doLogin() {
     method: 'POST', headers: {'Content-Type':'application/json'},
     body: JSON.stringify({password:pw})
   });
-  if (res.ok) { authed = true; await loadData(); render(); }
-  else {
+  if (res.ok) {
+    const data = await res.json();
+    adminToken = data.token;
+    sessionStorage.setItem('adminToken', adminToken);
+    authed = true;
+    await loadData();
+    render();
+  } else {
     document.getElementById('pw').classList.add('error');
     const err = document.getElementById('loginErr');
     err.textContent = '비밀번호가 올바르지 않습니다.';
@@ -107,10 +120,19 @@ async function doLogin() {
   }
 }
 
+async function doLogout() {
+  try { await fetch('/api/admin/logout', { method: 'POST', headers: authHeaders() }); } catch(e) {}
+  adminToken = null;
+  sessionStorage.removeItem('adminToken');
+  authed = false;
+  render();
+}
+
 async function loadData() {
   loading = true;
   try {
-    const res = await fetch('/api/responses');
+    const res = await fetch('/api/responses', { headers: authHeaders() });
+    if (res.status === 401) { doLogout(); return; }
     responses = await res.json();
   } catch(e) { responses = []; }
   loading = false;
@@ -188,9 +210,9 @@ function renderDashboard(el) {
           <p style="font-size:13px;color:var(--text2);">총 ${responses.length}건의 응답</p>
         </div>
         <div class="header-actions">
-          <a href="/api/responses/export/csv" class="btn btn-green btn-sm">📥 CSV</a>
-          <a href="/api/responses/export/json" class="btn btn-blue btn-sm">📥 JSON</a>
-          <button class="btn btn-gray btn-sm" onclick="authed=false;render()">로그아웃</button>
+          <button class="btn btn-green btn-sm" onclick="downloadExport('csv')">📥 CSV</button>
+          <button class="btn btn-blue btn-sm" onclick="downloadExport('json')">📥 JSON</button>
+          <button class="btn btn-gray btn-sm" onclick="doLogout()">로그아웃</button>
         </div>
       </div>
 
@@ -218,6 +240,20 @@ function renderDashboard(el) {
         ${detailHtml}
       `}
     </div>`;
+}
+
+async function downloadExport(type) {
+  const res = await fetch('/api/responses/export/' + type, { headers: authHeaders() });
+  if (res.status === 401) { doLogout(); return; }
+  const blob = await res.blob();
+  const cd = res.headers.get('Content-Disposition') || '';
+  const match = cd.match(/filename="?([^"]+)"?/);
+  const filename = match ? decodeURIComponent(match[1]) : 'export.' + type;
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(a.href);
 }
 
 function toggleDetail(i) { selected = selected === i ? null : i; render(); }

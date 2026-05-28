@@ -1,4 +1,5 @@
 require('dotenv').config();
+const crypto = require('crypto');
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
@@ -8,10 +9,26 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const ADMIN_PASSWORD = process.env.ADMIN_PW || '0000';
 
+// Active admin tokens (in-memory)
+const adminTokens = new Set();
+
 // Middleware
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
+
+// Admin auth middleware
+function requireAdmin(req, res, next) {
+  const auth = req.headers.authorization;
+  if (!auth || !auth.startsWith('Bearer ')) {
+    return res.status(401).json({ error: '인증이 필요합니다.' });
+  }
+  const token = auth.slice(7);
+  if (!adminTokens.has(token)) {
+    return res.status(401).json({ error: '유효하지 않은 토큰입니다. 다시 로그인해주세요.' });
+  }
+  next();
+}
 
 // ===== SURVEY API =====
 
@@ -72,17 +89,26 @@ app.delete('/api/drafts/:code', async (req, res) => {
 app.post('/api/admin/login', (req, res) => {
   const { password } = req.body;
   if (password === ADMIN_PASSWORD) {
-    res.json({ success: true });
+    const token = crypto.randomBytes(32).toString('hex');
+    adminTokens.add(token);
+    res.json({ success: true, token });
   } else {
     res.status(401).json({ error: '비밀번호가 올바르지 않습니다.' });
   }
+});
+
+// Admin logout
+app.post('/api/admin/logout', requireAdmin, (req, res) => {
+  const token = req.headers.authorization.slice(7);
+  adminTokens.delete(token);
+  res.json({ success: true });
 });
 
 // IMPORTANT: Export routes MUST be defined BEFORE the :id route
 // Otherwise Express matches "export" as an :id parameter
 
 // Export CSV
-app.get('/api/responses/export/csv', async (req, res) => {
+app.get('/api/responses/export/csv', requireAdmin, async (req, res) => {
   try {
     const responses = await getAllResponses();
     const MODULES = getModuleIds();
@@ -126,7 +152,7 @@ app.get('/api/responses/export/csv', async (req, res) => {
 });
 
 // Export JSON
-app.get('/api/responses/export/json', async (req, res) => {
+app.get('/api/responses/export/json', requireAdmin, async (req, res) => {
   try {
     const responses = await getAllResponses();
     const filename = `SMC_설문응답_${new Date().toISOString().slice(0, 10)}.json`;
@@ -139,7 +165,7 @@ app.get('/api/responses/export/json', async (req, res) => {
 });
 
 // Get all responses (admin)
-app.get('/api/responses', async (req, res) => {
+app.get('/api/responses', requireAdmin, async (req, res) => {
   try {
     const responses = await getAllResponses();
     res.json(responses);
@@ -150,7 +176,7 @@ app.get('/api/responses', async (req, res) => {
 });
 
 // Get single response (MUST be after /export routes)
-app.get('/api/responses/:id', async (req, res) => {
+app.get('/api/responses/:id', requireAdmin, async (req, res) => {
   try {
     const response = await getResponse(req.params.id);
     if (!response) return res.status(404).json({ error: '응답을 찾을 수 없습니다.' });
@@ -161,7 +187,7 @@ app.get('/api/responses/:id', async (req, res) => {
 });
 
 // Stats
-app.get('/api/stats', async (req, res) => {
+app.get('/api/stats', requireAdmin, async (req, res) => {
   try {
     res.json(await getStats());
   } catch (err) {
