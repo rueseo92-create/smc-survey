@@ -171,4 +171,31 @@ async function deleteDraft(code) {
   await supabase.from('survey_drafts').delete().eq('resume_code', code);
 }
 
-module.exports = { saveResponse, getAllResponses, getResponse, getStats, saveDraft, loadDraft, deleteDraft };
+// ===== 리버스 멘토링 (key-value 저장소) =====
+
+async function getMentoringStore() {
+  const { data, error } = await supabase
+    .from('mentoring_store')
+    .select('key, value');
+
+  if (error) throw new Error('멘토링 데이터 조회 실패: ' + error.message);
+
+  const out = {};
+  (data || []).forEach(row => { out[row.key] = row.value; });
+  return out;
+}
+
+async function setMentoringKey(key, value) {
+  const { error } = await supabase
+    .from('mentoring_store')
+    .upsert({ key, value, updated_at: new Date().toISOString() }, { onConflict: 'key' });
+
+  if (error) throw new Error('멘토링 저장 실패: ' + error.message);
+  console.log(`[DB] Mentoring key saved: ${key}`);
+}
+
+module.exports = {
+  saveResponse, getAllResponses, getResponse, getStats,
+  saveDraft, loadDraft, deleteDraft,
+  getMentoringStore, setMentoringKey
+};

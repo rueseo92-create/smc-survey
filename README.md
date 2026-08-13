@@ -30,7 +30,8 @@ smc-survey-project/
 ├── db.js              ← JSON 파일 기반 DB (자동 백업)
 ├── public/
 │   ├── index.html     ← 설문 페이지 (프론트엔드)
-│   └── admin.html     ← 관리자 대시보드
+│   ├── admin.html     ← 관리자 대시보드
+│   └── mentoring.html ← AI 리버스 멘토링 (별도 설문, /mentoring)
 └── data/              ← 자동 생성
     ├── responses.json     ← 전체 응답 데이터
     ├── responses.json.bak ← 자동 백업
@@ -46,8 +47,22 @@ smc-survey-project/
 | GET | `/api/responses/:id` | 개별 응답 조회 |
 | GET | `/api/responses/export/csv` | CSV 다운로드 |
 | GET | `/api/responses/export/json` | JSON 다운로드 |
+| GET | `/api/mentoring/store` | 리버스 멘토링 전체 응답 조회 |
+| POST | `/api/mentoring/store` | 리버스 멘토링 응답 저장 (`{key, value}`) |
 | POST | `/api/admin/login` | 관리자 로그인 |
 | GET | `/api/stats` | 통계 |
+
+## AI 리버스 멘토링 설문 (`/mentoring`)
+
+기존 전문가 설문과 완전히 분리된 두 번째 설문입니다.
+
+- 페이지: `public/mentoring.html` (단일 파일 앱)
+- 주소: `/mentoring`
+- 저장: Supabase `mentoring_store` 테이블 (key-value). 기존 `survey_responses`와 무관
+- 멘토 화면: 앱 하단 **멘토 보기** — 두 멘티의 응답과 실기 평가 확인
+
+**주의: 이 설문에는 로그인이 없습니다.** 주소를 아는 사람은 멘토 화면까지 볼 수 있습니다.
+공개 범위를 제한해야 한다면 별도 인증을 추가해야 합니다.
 
 ## 데이터 안전성
 - `data/responses.json`에 전체 데이터 저장

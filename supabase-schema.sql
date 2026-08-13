@@ -62,3 +62,23 @@ CREATE POLICY "Anyone can delete drafts"
   ON survey_drafts FOR DELETE TO anon USING (true);
 
 CREATE INDEX IF NOT EXISTS idx_drafts_updated_at ON survey_drafts(updated_at DESC);
+
+-- ===== AI 리버스 멘토링 (key-value 저장소) 테이블 =====
+-- /mentoring 페이지의 응답이 여기에 쌓입니다. 기존 설문 테이블과 완전히 분리됩니다.
+CREATE TABLE IF NOT EXISTS mentoring_store (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL DEFAULT '',
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE mentoring_store ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Anyone can insert mentoring"
+  ON mentoring_store FOR INSERT TO anon WITH CHECK (true);
+
+CREATE POLICY "Anyone can read mentoring"
+  ON mentoring_store FOR SELECT TO anon USING (true);
+
+CREATE POLICY "Anyone can update mentoring"
+  ON mentoring_store FOR UPDATE TO anon USING (true) WITH CHECK (true);

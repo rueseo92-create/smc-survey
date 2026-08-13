@@ -3,7 +3,11 @@ const crypto = require('crypto');
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
-const { saveResponse, getAllResponses, getResponse, getStats, saveDraft, loadDraft, deleteDraft } = require('./db');
+const {
+  saveResponse, getAllResponses, getResponse, getStats,
+  saveDraft, loadDraft, deleteDraft,
+  getMentoringStore, setMentoringKey
+} = require('./db');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -195,9 +199,50 @@ app.get('/api/stats', requireAdmin, async (req, res) => {
   }
 });
 
+// ===== 리버스 멘토링 API =====
+// 프론트(public/mentoring.html)는 단순 key-value 저장소를 기대한다.
+//   GET  /api/mentoring/store?all=1  →  { ok, data: { key: jsonString } }
+//   POST /api/mentoring/store        →  { key, value }
+
+const MENTORING_KEY_PATTERN = /^rm-[a-z]+:[a-z0-9_-]+$/i;
+const MENTORING_MAX_VALUE_BYTES = 256 * 1024;
+
+app.get('/api/mentoring/store', async (req, res) => {
+  try {
+    res.json({ ok: true, data: await getMentoringStore() });
+  } catch (err) {
+    console.error('Mentoring read error:', err);
+    res.status(500).json({ ok: false, error: '조회 중 오류가 발생했습니다.' });
+  }
+});
+
+app.post('/api/mentoring/store', async (req, res) => {
+  try {
+    const { key, value } = req.body || {};
+    if (typeof key !== 'string' || typeof value !== 'string') {
+      return res.status(400).json({ ok: false, error: 'key and value required' });
+    }
+    if (!MENTORING_KEY_PATTERN.test(key)) {
+      return res.status(400).json({ ok: false, error: 'invalid key' });
+    }
+    if (Buffer.byteLength(value) > MENTORING_MAX_VALUE_BYTES) {
+      return res.status(413).json({ ok: false, error: 'value too large' });
+    }
+    await setMentoringKey(key, value);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Mentoring write error:', err);
+    res.status(500).json({ ok: false, error: '저장 중 오류가 발생했습니다.' });
+  }
+});
+
 // SPA fallback
 app.get('/admin', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'admin.html'));
+});
+
+app.get('/mentoring', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'mentoring.html'));
 });
 
 // Helpers
